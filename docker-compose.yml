@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  fraud_zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: fraud_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2182:2181"
+    networks:
+      - fraud-net
+
+  fraud_kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: fraud_kafka
+    depends_on:
+      - fraud_zookeeper
+    ports:
+      - "9094:9094"
+      - "29094:29094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: fraud_zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://fraud_kafka:29094,PLAINTEXT_HOST://localhost:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    networks:
+      - fraud-net
+
+  fraud_redis:
+    image: redis:7-alpine
+    container_name: fraud_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - fraud_redis_data:/data
+    networks:
+      - fraud-net
+
+  fraud_postgres:
+    image: postgres:14-alpine
+    container_name: fraud_postgres
+    environment:
+      POSTGRES_USER: sentinel_user
+      POSTGRES_PASSWORD: sentinel_secret
+      POSTGRES_DB: financial_fraud_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - fraud_pg_data:/var/lib/postgresql/data
+      - ./configs/postgres_init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fraud-net
+
+networks:
+  fraud-net:
+    driver: bridge
+
+volumes:
+  fraud_redis_data:
+  fraud_pg_data:
